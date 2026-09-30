@@ -1,4 +1,4 @@
-max = int(input())
+max = float(input())
 kol = int(input())
 ercon = 0
 upcon = 0
