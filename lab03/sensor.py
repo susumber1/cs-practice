@@ -14,7 +14,7 @@ for i in range(kol):
         if b > maxin:
             maxin = b
         koltrue += 1
-        midin += 1
+        midin += b
     except:
         ercon += 1
 midin = midin/koltrue
