@@ -1,7 +1,14 @@
 """Распознавание целой страницы печатного текста на русском языке."""
 
 import argparse
+import os
 from pathlib import Path
+
+import certifi
+
+# У Python.org для macOS сертификаты иногда не настроены. Используем
+# актуальный bundle сертификатов, сохраняя настройку пользователя, если она есть.
+os.environ.setdefault("SSL_CERT_FILE", certifi.where())
 
 import easyocr
 import numpy as np
