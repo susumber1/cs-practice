@@ -14,6 +14,7 @@ import easyocr
 import numpy as np
 from PIL import Image, ImageOps
 from pillow_heif import register_heif_opener
+import pymupdf
 
 
 def собрать_строки(результаты) -> list[str]:
@@ -89,15 +90,9 @@ def собрать_строки(результаты) -> list[str]:
     ]
 
 
-def распознать(путь: Path) -> str:
-    """Загружает русскую OCR-модель и распознаёт страницу целиком."""
-    register_heif_opener()
-    with Image.open(путь) as исходное_изображение:
-        изображение = ImageOps.exif_transpose(исходное_изображение).convert("RGB")
-
-    # EasyOCR умеет распознавать русский текст и самостоятельно загружает
-    # предварительно обученные веса при первом запуске.
-    распознаватель = easyocr.Reader(["ru"], gpu=False, verbose=False)
+def распознать_страницу(изображение: Image.Image, распознаватель) -> str:
+    """Передаёт одну страницу изображения в OCR-модель."""
+    изображение = ImageOps.exif_transpose(изображение).convert("RGB")
     результаты = распознаватель.readtext(
         np.asarray(изображение),
         detail=1,
@@ -108,11 +103,51 @@ def распознать(путь: Path) -> str:
     return "\n".join(собрать_строки(результаты))
 
 
+def распознать(путь: Path) -> str:
+    """Распознаёт изображение или каждую страницу PDF-файла."""
+    register_heif_opener()
+
+    # EasyOCR умеет распознавать русский текст и самостоятельно загружает
+    # предварительно обученные веса при первом запуске.
+    распознаватель = easyocr.Reader(["ru"], gpu=False, verbose=False)
+
+    if путь.suffix.lower() == ".pdf":
+        результаты_страниц = []
+        with pymupdf.open(str(путь)) as документ:
+            if документ.page_count == 0:
+                raise ValueError("В PDF нет страниц.")
+            for номер, страница in enumerate(документ, start=1):
+                пиксели = страница.get_pixmap(
+                    matrix=pymupdf.Matrix(2, 2),
+                    colorspace=pymupdf.csRGB,
+                    alpha=False,
+                )
+                изображение = Image.frombytes(
+                    "RGB", (пиксели.width, пиксели.height), пиксели.samples
+                )
+                текст = распознать_страницу(изображение, распознаватель)
+                результаты_страниц.append((номер, текст))
+
+        if not any(текст.strip() for _, текст in результаты_страниц):
+            raise ValueError("На страницах PDF не удалось найти текст.")
+        if len(результаты_страниц) == 1:
+            return результаты_страниц[0][1]
+        return "\n\n".join(
+            f"Страница {номер}\n{текст}" if текст else f"Страница {номер}"
+            for номер, текст in результаты_страниц
+        )
+
+    with Image.open(путь) as исходное_изображение:
+        return распознать_страницу(исходное_изображение, распознаватель)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Распознаёт страницу печатного русского текста с фото или скана."
+        description="Распознаёт печатный русский текст на фото, скане или в PDF."
     )
-    parser.add_argument("изображение", type=Path, help="Путь к файлу JPG, PNG или HEIC")
+    parser.add_argument(
+        "файл", type=Path, help="Путь к JPG, PNG, HEIC или PDF"
+    )
     parser.add_argument(
         "--output",
         type=Path,
@@ -120,13 +155,15 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if not args.изображение.is_file():
-        parser.error(f"Файл не найден: {args.изображение}")
+    if not args.файл.is_file():
+        parser.error(f"Файл не найден: {args.файл}")
 
     try:
-        текст = распознать(args.изображение)
+        текст = распознать(args.файл)
+        if not текст.strip():
+            raise ValueError("Не удалось найти текст на изображении.")
     except Exception as ошибка:
-        parser.exit(1, f"Не удалось распознать изображение: {ошибка}\n")
+        parser.exit(1, f"Не удалось обработать файл: {ошибка}\n")
 
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
