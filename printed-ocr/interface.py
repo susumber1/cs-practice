@@ -68,8 +68,8 @@ class ПриложениеOCR:
         self.очередь: queue.Queue = queue.Queue()
         self.остановка = threading.Event()
         self.занято = False
-        self.проверка = tk.BooleanVar(value=False)
-        self.диплом = tk.BooleanVar(value=False)
+        self.проверка = tk.BooleanVar(value=True)
+        self.диплом = tk.BooleanVar(value=True)
         self.папка_выбора = Path.home()
         self._стили()
         self._создать_интерфейс()
@@ -260,7 +260,7 @@ class ПриложениеOCR:
         self.сводка_параметров.grid(row=0, column=1, sticky="w", padx=16)
         self.меню_параметров = self._новое_меню(self.окно)
         for текст, переменная in (("Проверить текст после распознавания", self.проверка),
-                                  ("Диплом ЮФУ по шаблону", self.диплом)):
+                                  ("Шаблон ЮФУ — только раздел «Диплом»", self.диплом)):
             self.меню_параметров.add_checkbutton(label=текст, variable=переменная,
                                                 command=self._обновить_параметры)
         self._обновить_параметры()
@@ -291,7 +291,7 @@ class ПриложениеOCR:
         if self.проверка.get():
             включены.append("Проверка текста")
         if self.диплом.get():
-            включены.append("Шаблон ЮФУ")
+            включены.append("Шаблон ЮФУ: диплом")
         self.сводка_параметров.configure(text=" · ".join(включены) or "Обычное распознавание")
 
     def _создать_панель_файлов(self, родитель) -> None:
