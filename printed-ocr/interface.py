@@ -7,6 +7,7 @@ import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, font as tkfont, messagebox, ttk
+from rounded_widgets import Карточка, Кнопка, ПолосаПрокрутки, Прогресс
 from appearance import (
     АКЦЕНТЫ, РАЗМЕРЫ, ТЕМЫ, Оформление, загрузить_оформление, сохранить_оформление,
 )
@@ -54,6 +55,8 @@ class ПриложениеOCR:
         окно.minsize(1000, 740)
         self.оформление = загрузить_оформление()
         self._надписи = []
+        self._компоненты = []
+        self._меню = []
         self._окно_оформления = None
         self.шрифт = tkfont.nametofont("TkDefaultFont").actual("family")
         self.типы = {тип.код: тип for тип in ТИПЫ_ДОКУМЕНТОВ}
@@ -83,71 +86,75 @@ class ПриложениеOCR:
             стиль.theme_use("clam")
         self.окно.configure(background=п[ФОН])
         стиль.configure(".", background=п[ФОН], foreground=п[ТЕКСТ],
-                         font=(self.шрифт, р(11)), bordercolor=п["border"],
-                         focuscolor=п["accent"], troughcolor=п[ФОН])
+                         font=(self.шрифт, р(11)), borderwidth=0,
+                         bordercolor=п[ФОН], lightcolor=п[ФОН], darkcolor=п[ФОН])
         стиль.configure("TFrame", background=п[ФОН])
         стиль.configure("Card.TFrame", background=п[ПОВЕРХНОСТЬ])
         стиль.configure("TLabel", background=п[ФОН], foreground=п[ТЕКСТ],
                          font=(self.шрифт, р(12)))
         стиль.configure("Muted.TLabel", foreground=п[ВТОРИЧНЫЙ], font=(self.шрифт, р(10)))
-        стиль.configure("TButton", background=п[ПОВЕРХНОСТЬ], foreground=п[ТЕКСТ],
-                         bordercolor=п["border"], lightcolor=п[ПОВЕРХНОСТЬ],
-                         darkcolor=п["border"], padding=(12, 8),
-                         font=(self.шрифт, р(11)), relief="flat")
-        стиль.map("TButton", background=[("disabled", п[ПОВЕРХНОСТЬ]),
-                                           ("active", п["hover"])],
-                    foreground=[("disabled", п["disabled"])])
-        стиль.configure("Accent.TButton", background=п["accent"], foreground="#FFFFFF",
-                         borderwidth=0, padding=(18, 11), font=(self.шрифт, р(12), "bold"))
-        стиль.map("Accent.TButton", background=[("disabled", п["border"]),
-                                                  ("active", п["accent_hover"])],
-                    foreground=[("disabled", п["disabled"]), ("!disabled", "#FFFFFF")])
-        стиль.configure("Nav.TButton", background=п[ФОН], borderwidth=0,
-                         padding=(14, 13), anchor="w", font=(self.шрифт, р(12)))
-        стиль.configure("Selected.Nav.TButton", background=п["selection"],
-                         foreground=п[ТЕКСТ], font=(self.шрифт, р(12), "bold"))
-        стиль.map("Selected.Nav.TButton", background=[("active", п["hover"]),
-                                                        ("!active", п["selection"])])
-        стиль.configure("TCheckbutton", background=п[ФОН], foreground=п[ТЕКСТ],
-                         font=(self.шрифт, р(11)), padding=(0, 3),
-                         indicatorbackground=п[ПОВЕРХНОСТЬ], indicatorforeground="#FFFFFF")
-        стиль.map("TCheckbutton", background=[("active", п[ФОН])],
-                    foreground=[("disabled", п["disabled"])],
-                    indicatorbackground=[("selected", п["accent"])])
-        стиль.configure("Treeview", background=п[ПОВЕРХНОСТЬ], fieldbackground=п[ПОВЕРХНОСТЬ],
-                         foreground=п[ТЕКСТ], rowheight=31 + 2 * (р(11) - 11),
-                         borderwidth=0, font=(self.шрифт, р(11)))
-        стиль.configure("Treeview.Heading", background=п[ФОН], foreground=п[ВТОРИЧНЫЙ],
-                         relief="flat", padding=(8, 7), font=(self.шрифт, р(10), "bold"))
-        стиль.map("Treeview.Heading", background=[("active", п["hover"])])
+        # Удаляем системный field-элемент: clam рисует светлую рамку даже при borderwidth=0.
+        стиль.layout("Treeview", [("Treeview.treearea", {"sticky": "nswe"})])
+        стиль.configure("Treeview", background=п["field"], fieldbackground=п["field"],
+                         foreground=п[ТЕКСТ], rowheight=34 + 2 * (р(11) - 11),
+                         borderwidth=0, relief="flat", font=(self.шрифт, р(11)))
+        стиль.layout("Treeview.Heading", [("Treeheading.padding", {"sticky": "nswe", "children": [
+            ("Treeheading.text", {"sticky": "we"}),
+        ]})])
+        стиль.configure("Treeview.Heading", background=п["field"], foreground=п[ВТОРИЧНЫЙ],
+                         relief="flat", padding=(8, 10), font=(self.шрифт, р(10), "bold"))
         стиль.map("Treeview", background=[("selected", п["selection"])],
                     foreground=[("selected", п[ТЕКСТ])])
-        стиль.configure("Horizontal.TProgressbar", troughcolor=п["border"],
-                         background=п["accent"], borderwidth=0, thickness=5)
         стиль.configure("TPanedwindow", background=п[ФОН])
-        стиль.configure("TScrollbar", background=п["border"], troughcolor=п[ПОВЕРХНОСТЬ],
-                         arrowcolor=п[ВТОРИЧНЫЙ], borderwidth=0)
-        стиль.map("TScrollbar", background=[("active", п["hover"]),
-                                              ("pressed", п["selection"])])
-        стиль.configure("TCombobox", fieldbackground=п[ПОВЕРХНОСТЬ], background=п[ПОВЕРХНОСТЬ],
-                         foreground=п[ТЕКСТ], arrowcolor=п[ТЕКСТ], padding=7)
-        стиль.map("TCombobox", fieldbackground=[("readonly", п[ПОВЕРХНОСТЬ])],
-                    foreground=[("readonly", п[ТЕКСТ])],
-                    selectbackground=[("readonly", п[ПОВЕРХНОСТЬ])],
-                    selectforeground=[("readonly", п[ТЕКСТ])])
-        for опция, значение in {"background": п[ПОВЕРХНОСТЬ], "foreground": п[ТЕКСТ],
-                                 "selectBackground": п["selection"],
-                                 "selectForeground": п[ТЕКСТ],
-                                 "font": (self.шрифт, р(11))}.items():
-            self.окно.option_add(f"*TCombobox*Listbox.{опция}", значение)
+        стиль.configure("Sash", sashthickness=12, background=п[ФОН], gripcount=0)
         for виджет, размер, жирный, цвет, фон in self._надписи:
-            виджет.configure(background=п[фон], foreground=п[цвет],
-                              font=(self.шрифт, р(размер), "bold" if жирный else "normal"))
+            if виджет.winfo_exists():
+                виджет.configure(background=п[фон], foreground=п[цвет],
+                                  font=(self.шрифт, р(размер), "bold" if жирный else "normal"))
+        self._компоненты = [в for в in self._компоненты if в.winfo_exists()]
+        for виджет in self._компоненты:
+            виджет.оформить(п, (self.шрифт, р(11)))
+        self._меню = [м for м in self._меню if м.winfo_exists()]
+        for меню in self._меню:
+            меню.configure(background=п[ПОВЕРХНОСТЬ], foreground=п[ТЕКСТ],
+                            activebackground=п["selection"], activeforeground=п[ТЕКСТ],
+                            font=(self.шрифт, р(11)), borderwidth=0, relief="flat")
         if hasattr(self, "результат"):
-            self.результат.configure(background=п[ПОВЕРХНОСТЬ], foreground=п[ТЕКСТ],
+            self.результат.configure(background=п["field"], foreground=п[ТЕКСТ],
                                      insertbackground=п[ТЕКСТ], selectbackground=п["selection"],
                                      selectforeground=п[ТЕКСТ], font=(self.шрифт, р(12)))
-            self.боковая.configure(width=238 + (р(12) - 12) * 16)
+
+    def _кнопка(self, родитель, текст, команда, *, фон=ФОН, акцент=False, state="normal"):
+        кнопка = Кнопка(родитель, text=текст, command=команда, палитра=self.оформление.палитра,
+                         font=(self.шрифт, self.оформление.шрифт(11)), фон=фон,
+                         акцент=акцент, state=state)
+        self._компоненты.append(кнопка)
+        return кнопка
+
+    def _карточка(self, родитель, **параметры):
+        виджет = Карточка(родитель, палитра=self.оформление.палитра, **параметры)
+        self._компоненты.append(виджет)
+        return виджет
+
+    def _полоса(self, родитель, команда):
+        виджет = ПолосаПрокрутки(родитель, command=команда, палитра=self.оформление.палитра)
+        self._компоненты.append(виджет)
+        return виджет
+
+    def _новое_меню(self, родитель):
+        п = self.оформление.палитра
+        меню = tk.Menu(родитель, tearoff=False, background=п[ПОВЕРХНОСТЬ], foreground=п[ТЕКСТ],
+                        activebackground=п["selection"], activeforeground=п[ТЕКСТ],
+                        font=(self.шрифт, self.оформление.шрифт(11)), borderwidth=0, relief="flat")
+        self._меню.append(меню)
+        return меню
+
+    @staticmethod
+    def _показать_меню(кнопка, меню):
+        try:
+            меню.tk_popup(кнопка.winfo_rootx(), кнопка.winfo_rooty()+кнопка.winfo_height()+4)
+        finally:
+            меню.grab_release()
 
     def _надпись(self, родитель, текст="", *, размер=12, жирный=False,
                  цвет=ТЕКСТ, фон=ПОВЕРХНОСТЬ, **параметры) -> tk.Label:
@@ -180,9 +187,14 @@ class ПриложениеOCR:
             ttk.Label(панель, text=подпись).grid(row=строка, column=0, sticky="w", padx=(0, 18), pady=8)
             переменная = tk.StringVar(master=диалог, value=getattr(self.оформление, ключ))
             значения[ключ] = переменная
-            ttk.Combobox(панель, textvariable=переменная, values=tuple(варианты),
-                         state="readonly", width=20, font=(self.шрифт, self.оформление.шрифт(11))).grid(
-                row=строка, column=1, sticky="ew", pady=8)
+            меню = self._новое_меню(диалог)
+            кнопка = self._кнопка(панель, переменная.get() + "  ▾", lambda: None)
+            кнопка.command = lambda к=кнопка, м=меню: self._показать_меню(к, м)
+            кнопка.grid(row=строка, column=1, sticky="ew", pady=8)
+            for вариант in варианты:
+                меню.add_radiobutton(label=вариант, variable=переменная, value=вариант)
+            переменная.trace_add("write", lambda *args, к=кнопка, п=переменная:
+                                 к.configure(text=п.get() + "  ▾"))
         ttk.Label(панель, text="Выбор сохранится для следующих запусков.",
                   style="Muted.TLabel").grid(row=3, column=0, columnspan=2, sticky="w", pady=(12, 18))
         кнопки = ttk.Frame(панель)
@@ -191,6 +203,8 @@ class ПриложениеOCR:
         def закрыть():
             self._окно_оформления = None
             диалог.destroy()
+            self._компоненты = [в for в in self._компоненты if в.winfo_exists()]
+            self._меню = [м for м in self._меню if м.winfo_exists()]
 
         def сбросить():
             исходные = Оформление()
@@ -208,173 +222,179 @@ class ПриложениеOCR:
             self._стили()
             закрыть()
 
-        ttk.Button(кнопки, text="Сбросить", command=сбросить).pack(side="left")
-        ttk.Button(кнопки, text="Сохранить", style="Accent.TButton", command=применить).pack(side="right")
-        ttk.Button(кнопки, text="Отмена", command=закрыть).pack(side="right", padx=8)
+        self._кнопка(кнопки, "Сбросить", сбросить).pack(side="left")
+        self._кнопка(кнопки, "Сохранить", применить, акцент=True).pack(side="right")
+        self._кнопка(кнопки, "Отмена", закрыть).pack(side="right", padx=8)
         диалог.protocol("WM_DELETE_WINDOW", закрыть)
         диалог.bind("<Escape>", lambda событие: закрыть())
         диалог.grab_set()
         диалог.focus_set()
 
     def _создать_интерфейс(self) -> None:
-        основной = ttk.Frame(self.окно, padding=22)
+        основной = ttk.Frame(self.окно, padding=24)
         основной.pack(fill="both", expand=True)
         основной.columnconfigure(0, weight=1)
         основной.rowconfigure(2, weight=1)
         шапка = ttk.Frame(основной)
-        шапка.grid(row=0, column=0, sticky="ew", pady=(0, 16))
+        шапка.grid(row=0, column=0, sticky="ew", pady=(0, 18))
         шапка.columnconfigure(0, weight=1)
         self._надпись(шапка, "Документы", размер=25, жирный=True, фон=ФОН).grid(
             row=0, column=0, sticky="w")
-        self._надпись(шапка, "Соберите комплект и получите текст по разделам",
-                      цвет=ВТОРИЧНЫЙ, фон=ФОН).grid(row=1, column=0, sticky="w", pady=(4, 0))
-        self.кнопка_стоп = ttk.Button(шапка, text="Остановить", command=self._остановить)
-        self.кнопка_стоп.grid(row=0, column=2, rowspan=2, padx=(8, 10))
-        self.кнопка_стоп.grid_remove()
-        self.кнопка_распознать = ttk.Button(
-            шапка, text="Распознать комплект", style="Accent.TButton",
-            command=self._начать_распознавание, state="disabled")
-        self.кнопка_распознать.grid(row=0, column=3, rowspan=2)
-        ttk.Button(шапка, text="Оформление…", command=self._настроить_оформление).grid(
+        self._надпись(шапка, "Фото и PDF → редактируемый текст", цвет=ВТОРИЧНЫЙ, фон=ФОН).grid(
+            row=1, column=0, sticky="w", pady=(4, 0))
+        self._кнопка(шапка, "Оформление", self._настроить_оформление).grid(
             row=0, column=1, rowspan=2, padx=(12, 10))
+        self.кнопка_стоп = self._кнопка(шапка, "Остановить", self._остановить)
+        self.кнопка_стоп.grid(row=0, column=2, rowspan=2, padx=(0, 10))
+        self.кнопка_стоп.grid_remove()
+        self.кнопка_распознать = self._кнопка(
+            шапка, "Распознать комплект", self._начать_распознавание, акцент=True, state="disabled")
+        self.кнопка_распознать.grid(row=0, column=3, rowspan=2)
 
-        параметры = ttk.Frame(основной)
-        параметры.grid(row=1, column=0, sticky="ew", pady=(0, 16))
-        self.флажок_проверки = ttk.Checkbutton(
-            параметры, text="Проверить текст после распознавания", variable=self.проверка)
-        self.флажок_проверки.grid(row=0, column=0, sticky="w", padx=(0, 24))
-        self.флажок_диплома = ttk.Checkbutton(
-            параметры, text="Диплом ЮФУ по шаблону", variable=self.диплом)
-        self.флажок_диплома.grid(row=0, column=1, sticky="w")
-        self._надпись(
-            параметры, "Шаблон — только для диплома. Паспортные данные сохраняются без языковой правки.",
-            размер=10, цвет=ВТОРИЧНЫЙ, фон=ФОН,
-        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(3, 0))
-
-        содержимое = ttk.Frame(основной)
-        содержимое.grid(row=2, column=0, sticky="nsew")
-        содержимое.columnconfigure(1, weight=1)
-        содержимое.rowconfigure(0, weight=1)
-        self.боковая = боковая = ttk.Frame(содержимое, width=238 + (self.оформление.шрифт(12) - 12) * 16)
-        боковая.grid(row=0, column=0, sticky="nsw", padx=(0, 20))
-        боковая.grid_propagate(False)
-        боковая.columnconfigure(0, weight=1)
-        self._надпись(боковая, "КОМПЛЕКТ ДОКУМЕНТОВ", размер=10, жирный=True,
-                      цвет=ВТОРИЧНЫЙ, фон=ФОН).grid(row=0, column=0, sticky="w", pady=(0, 10))
-        self.кнопки_разделов = {}
-        for номер, тип in enumerate(ТИПЫ_ДОКУМЕНТОВ, start=1):
-            кнопка = ttk.Button(боковая, style="Nav.TButton",
-                                command=lambda код=тип.код: self._выбрать_раздел(код))
-            кнопка.grid(row=номер, column=0, sticky="ew", pady=(0, 5))
-            self.кнопки_разделов[тип.код] = кнопка
-        низ = len(ТИПЫ_ДОКУМЕНТОВ) + 1
-        боковая.rowconfigure(низ, weight=1)
-        self.итог_файлов = self._надпись(боковая, размер=11, жирный=True, фон=ФОН)
-        self.итог_файлов.grid(row=низ + 1, column=0, sticky="w", pady=(20, 5))
-        self._надпись(боковая, "JPG, JPEG, PNG, HEIC, PDF\nВсе страницы PDF распознаются\nавтоматически.",
-                      размер=10, цвет=ВТОРИЧНЫЙ, фон=ФОН).grid(row=низ + 2, column=0, sticky="w")
-
-        рабочая = ttk.Panedwindow(содержимое, orient="vertical")
-        рабочая.grid(row=0, column=1, sticky="nsew")
+        панель = ttk.Frame(основной)
+        панель.grid(row=1, column=0, sticky="ew", pady=(0, 16))
+        панель.columnconfigure(1, weight=1)
+        self.кнопка_параметров = self._кнопка(панель, "Параметры  ▾", self._открыть_параметры)
+        self.кнопка_параметров.grid(row=0, column=0, sticky="w")
+        self.сводка_параметров = self._надпись(панель, размер=10, цвет=ВТОРИЧНЫЙ, фон=ФОН)
+        self.сводка_параметров.grid(row=0, column=1, sticky="w", padx=16)
+        self.меню_параметров = self._новое_меню(self.окно)
+        for текст, переменная in (("Проверить текст после распознавания", self.проверка),
+                                  ("Диплом ЮФУ по шаблону", self.диплом)):
+            self.меню_параметров.add_checkbutton(label=текст, variable=переменная,
+                                                command=self._обновить_параметры)
+        self._обновить_параметры()
+        self.итог_файлов = self._надпись(панель, размер=11, жирный=True, фон=ФОН)
+        self.итог_файлов.grid(row=0, column=2, sticky="e")
+        рабочая = ttk.Panedwindow(основной, orient="vertical")
+        рабочая.grid(row=2, column=0, sticky="nsew")
         self._создать_панель_файлов(рабочая)
         self._создать_панель_результата(рабочая)
         нижняя = ttk.Frame(основной)
-        нижняя.grid(row=3, column=0, sticky="ew", pady=(15, 0))
+        нижняя.grid(row=3, column=0, sticky="ew", pady=(16, 0))
         нижняя.columnconfigure(0, weight=1)
-        self.статус = self._надпись(нижняя, "Добавьте документы в нужные разделы.",
-                                   размер=11, цвет=ВТОРИЧНЫЙ, фон=ФОН, wraplength=850)
+        self.статус = self._надпись(нижняя, "Выберите раздел и добавьте фото или PDF.",
+                                   размер=11, цвет=ВТОРИЧНЫЙ, фон=ФОН, wraplength=800)
         self.статус.grid(row=0, column=0, sticky="w")
         нижняя.bind("<Configure>", lambda событие: self.статус.configure(
-            wraplength=max(250, событие.width - 170)))
-        self.прогресс = ttk.Progressbar(нижняя, length=150, mode="determinate")
-        self.прогресс.grid(row=0, column=1, sticky="e", padx=(15, 0))
+            wraplength=max(250, событие.width - 180)))
+        self.прогресс = Прогресс(нижняя, палитра=self.оформление.палитра)
+        self._компоненты.append(self.прогресс)
+        self.прогресс.grid(row=0, column=1, sticky="e", padx=(20, 0))
+
+    def _открыть_параметры(self):
+        if not self.занято:
+            self._показать_меню(self.кнопка_параметров, self.меню_параметров)
+
+    def _обновить_параметры(self):
+        включены = []
+        if self.проверка.get():
+            включены.append("Проверка текста")
+        if self.диплом.get():
+            включены.append("Шаблон ЮФУ")
+        self.сводка_параметров.configure(text=" · ".join(включены) or "Обычное распознавание")
 
     def _создать_панель_файлов(self, родитель) -> None:
-        карточка = ttk.Frame(родитель, style="Card.TFrame", padding=18)
-        родитель.add(карточка, weight=1)
+        оболочка = self._карточка(родитель, height=320)
+        родитель.add(оболочка, weight=1)
+        карточка = оболочка.body
         карточка.columnconfigure(0, weight=1)
         карточка.rowconfigure(3, weight=1)
-        self.заголовок_раздела = self._надпись(карточка, размер=17, жирный=True)
-        self.заголовок_раздела.grid(row=0, column=0, sticky="w")
-        self.описание_раздела = self._надпись(карточка, размер=11, цвет=ВТОРИЧНЫЙ,
-                                           wraplength=650)
-        self.описание_раздела.grid(row=1, column=0, sticky="ew", pady=(5, 12))
+        шапка = ttk.Frame(карточка, style="Card.TFrame")
+        шапка.grid(row=0, column=0, sticky="ew")
+        шапка.columnconfigure(1, weight=1)
+        self.выбранный_раздел = tk.StringVar(value=self.раздел)
+        self.меню_разделов = self._новое_меню(self.окно)
+        self.кнопка_раздела = self._кнопка(шапка, "Диплом  ▾", lambda: self._показать_меню(
+            self.кнопка_раздела, self.меню_разделов), фон=ПОВЕРХНОСТЬ)
+        self.кнопка_раздела.grid(row=0, column=0, sticky="w")
+        self._надпись(шапка, "JPG / PNG / HEIC / PDF", размер=10, цвет=ВТОРИЧНЫЙ).grid(
+            row=0, column=1, sticky="e")
+        self.описание_раздела = self._надпись(карточка, размер=11, цвет=ВТОРИЧНЫЙ, wraplength=900)
+        self.описание_раздела.grid(row=1, column=0, sticky="ew", pady=(8, 12))
         панель = ttk.Frame(карточка, style="Card.TFrame")
-        панель.grid(row=2, column=0, sticky="ew", pady=(0, 10))
-        self.кнопка_добавить = ttk.Button(панель, text="+ Добавить фото или PDF",
-                                        command=self._добавить_файлы)
+        панель.grid(row=2, column=0, sticky="ew", pady=(0, 12))
+        self.кнопка_добавить = self._кнопка(панель, "+ Добавить фото или PDF", self._добавить_файлы,
+                                          фон=ПОВЕРХНОСТЬ)
         self.кнопка_добавить.pack(side="left")
-        self.кнопка_удалить = ttk.Button(панель, text="Удалить", command=self._удалить_файлы)
+        self.кнопка_удалить = self._кнопка(панель, "Удалить", self._удалить_файлы, фон=ПОВЕРХНОСТЬ)
         self.кнопка_удалить.pack(side="left", padx=(8, 0))
-        self.кнопка_выше = ttk.Button(панель, text="Выше", command=lambda: self._переместить(-1))
+        self.кнопка_выше = self._кнопка(панель, "↑ Выше", lambda: self._переместить(-1), фон=ПОВЕРХНОСТЬ)
         self.кнопка_выше.pack(side="left", padx=(8, 0))
-        self.кнопка_ниже = ttk.Button(панель, text="Ниже", command=lambda: self._переместить(1))
+        self.кнопка_ниже = self._кнопка(панель, "↓ Ниже", lambda: self._переместить(1), фон=ПОВЕРХНОСТЬ)
         self.кнопка_ниже.pack(side="left", padx=(8, 0))
-        список = ttk.Frame(карточка, style="Card.TFrame")
-        список.grid(row=3, column=0, sticky="nsew")
+        оболочка_списка = self._карточка(карточка, фон=ПОВЕРХНОСТЬ, цвет="field", отступ=10, height=100)
+        оболочка_списка.grid(row=3, column=0, sticky="nsew")
+        список = оболочка_списка.body
         список.rowconfigure(0, weight=1)
         список.columnconfigure(0, weight=1)
         self.список = ttk.Treeview(список, columns=("номер", "файл", "формат"),
-                                 show="headings", selectmode="extended", height=4)
+                                 show="headings", selectmode="extended", height=3)
         for код, текст, ширина in (("номер", "№", 42), ("файл", "Файл", 330),
-                                    ("формат", "Формат", 145)):
+                                    ("формат", "Формат", 160)):
             self.список.heading(код, text=текст, anchor="w")
             self.список.column(код, width=ширина, minwidth=ширина if код != "файл" else 160,
                                stretch=код == "файл", anchor="w")
         self.список.grid(row=0, column=0, sticky="nsew")
-        полоса = ttk.Scrollbar(список, orient="vertical", command=self.список.yview)
-        полоса.grid(row=0, column=1, sticky="ns")
+        полоса = self._полоса(список, self.список.yview)
+        полоса.grid(row=0, column=1, sticky="ns", padx=(6, 0))
         self.список.configure(yscrollcommand=полоса.set)
         self.список.bind("<<TreeviewSelect>>", lambda событие: self._обновить_кнопки())
         for клавиша in ("<Delete>", "<BackSpace>"):
             self.список.bind(клавиша, lambda событие: self._удалить_файлы())
         self.подсказка_файлов = self._надпись(
-            карточка, "Можно выбрать несколько файлов сразу. Порядок задаётся кнопками «Выше» и «Ниже».",
-            размер=10, цвет=ВТОРИЧНЫЙ, wraplength=650)
-        self.подсказка_файлов.grid(row=4, column=0, sticky="ew", pady=(9, 0))
+            карточка, "Можно добавить несколько файлов. Все страницы PDF обрабатываются автоматически.",
+            размер=10, цвет=ВТОРИЧНЫЙ, wraplength=900)
+        self.подсказка_файлов.grid(row=4, column=0, sticky="ew", pady=(10, 0))
+        карточка.bind("<Configure>", lambda e: (
+            self.описание_раздела.configure(wraplength=max(200, e.width)),
+            self.подсказка_файлов.configure(wraplength=max(200, e.width))))
 
     def _создать_панель_результата(self, родитель) -> None:
-        карточка = ttk.Frame(родитель, style="Card.TFrame", padding=18)
-        родитель.add(карточка, weight=2)
+        оболочка = self._карточка(родитель, height=310)
+        родитель.add(оболочка, weight=2)
+        карточка = оболочка.body
         карточка.columnconfigure(0, weight=1)
         карточка.rowconfigure(1, weight=1)
         шапка = ttk.Frame(карточка, style="Card.TFrame")
-        шапка.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        шапка.grid(row=0, column=0, sticky="ew", pady=(0, 14))
         шапка.columnconfigure(0, weight=1)
         self._надпись(шапка, "Распознанный текст", размер=16, жирный=True).grid(
             row=0, column=0, sticky="w")
         self.счётчик_текста = self._надпись(шапка, "Весь комплект", размер=10, цвет=ВТОРИЧНЫЙ)
         self.счётчик_текста.grid(row=1, column=0, sticky="w", pady=(3, 0))
-        self.кнопка_копировать = ttk.Button(шапка, text="Копировать", command=self._копировать,
-                                           state="disabled")
+        self.кнопка_копировать = self._кнопка(шапка, "Копировать", self._копировать,
+                                            фон=ПОВЕРХНОСТЬ, state="disabled")
         self.кнопка_копировать.grid(row=0, column=1, rowspan=2, padx=(8, 0))
-        self.кнопка_сохранить = ttk.Button(шапка, text="Сохранить TXT…", command=self._сохранить,
-                                          state="disabled")
+        self.кнопка_сохранить = self._кнопка(шапка, "Сохранить TXT…", self._сохранить,
+                                           фон=ПОВЕРХНОСТЬ, state="disabled")
         self.кнопка_сохранить.grid(row=0, column=2, rowspan=2, padx=(8, 0))
-        поле = ttk.Frame(карточка, style="Card.TFrame")
-        поле.grid(row=1, column=0, sticky="nsew")
+        оболочка_поля = self._карточка(карточка, фон=ПОВЕРХНОСТЬ, цвет="field", отступ=12, height=160)
+        оболочка_поля.grid(row=1, column=0, sticky="nsew")
+        поле = оболочка_поля.body
         поле.columnconfigure(0, weight=1)
         поле.rowconfigure(0, weight=1)
         п = self.оформление.палитра
         self.результат = tk.Text(поле, wrap="word", font=(self.шрифт, self.оформление.шрифт(12)),
-                                background=п[ПОВЕРХНОСТЬ], foreground=п[ТЕКСТ], insertbackground=п[ТЕКСТ],
+                                background=п["field"], foreground=п[ТЕКСТ], insertbackground=п[ТЕКСТ],
                                 selectbackground=п["selection"], selectforeground=п[ТЕКСТ],
                                 borderwidth=0, highlightthickness=0, padx=3, pady=6,
-                                spacing1=2, spacing3=3, height=10, undo=True)
+                                spacing1=2, spacing3=3, height=6, undo=True)
         self.результат.grid(row=0, column=0, sticky="nsew")
-        полоса = ttk.Scrollbar(поле, orient="vertical", command=self.результат.yview)
-        полоса.grid(row=0, column=1, sticky="ns")
+        полоса = self._полоса(поле, self.результат.yview)
+        полоса.grid(row=0, column=1, sticky="ns", padx=(6, 0))
         self.результат.configure(yscrollcommand=полоса.set)
         self.результат.bind("<<Modified>>", self._текст_изменён)
         self.пустой_результат = self._надпись(
-            поле, "Здесь появится текст документов\nПосле распознавания его можно отредактировать и сохранить.",
-            размер=12, цвет=ВТОРИЧНЫЙ)
+            поле, "Здесь появится текст документов\nЕго можно отредактировать, скопировать или сохранить.",
+            размер=12, цвет=ВТОРИЧНЫЙ, фон="field", wraplength=700)
         self.пустой_результат.place(relx=0.5, rely=0.45, anchor="center")
+        поле.bind("<Configure>", lambda e: self.пустой_результат.configure(wraplength=max(200, e.width-30)))
 
     def _выбрать_раздел(self, код: str) -> None:
         self.раздел = код
         тип = self.типы[код]
-        self.заголовок_раздела.configure(text=тип.название)
+        self.выбранный_раздел.set(код)
         self.описание_раздела.configure(text=тип.описание)
         self._обновить_список()
 
@@ -386,9 +406,14 @@ class ПриложениеOCR:
         if выделить:
             self.список.selection_set(tuple(str(номер) for номер in выделить))
             self.список.see(str(min(выделить)))
-        for код, кнопка in self.кнопки_разделов.items():
-            кнопка.configure(text=f"{self.типы[код].название}\n{число_файлов(len(self.файлы[код]))}",
-                              style="Selected.Nav.TButton" if код == self.раздел else "Nav.TButton")
+        self.меню_разделов.delete(0, "end")
+        for код, тип in self.типы.items():
+            self.меню_разделов.add_radiobutton(
+                label=f"{тип.название} · {число_файлов(len(self.файлы[код]))}",
+                variable=self.выбранный_раздел, value=код,
+                command=lambda к=код: self._выбрать_раздел(к))
+        self.кнопка_раздела.configure(
+            text=f"{self.типы[self.раздел].название} · {число_файлов(len(self.файлы[self.раздел]))}  ▾")
         всего = sum(map(len, self.файлы.values()))
         self.итог_файлов.configure(text=f"В комплекте: {число_файлов(всего)}")
         self._обновить_кнопки()
@@ -405,8 +430,9 @@ class ПриложениеOCR:
             (self.кнопка_распознать, есть_файлы and not self.занято),
         ):
             кнопка.configure(state="normal" if доступна else "disabled")
-        for флажок in (self.флажок_диплома, self.флажок_проверки):
-            флажок.configure(state="disabled" if self.занято else "normal")
+        self.кнопка_параметров.configure(state="disabled" if self.занято else "normal")
+        for индекс in range(2):
+            self.меню_параметров.entryconfigure(индекс, state="disabled" if self.занято else "normal")
 
     def _добавить_файлы(self) -> None:
         if self.занято:

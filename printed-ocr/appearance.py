@@ -11,17 +11,17 @@ from tempfile import NamedTemporaryFile
 ПУТЬ_НАСТРОЕК = Path.home() / "Library/Application Support/PrintedOCR/appearance.json"
 ТЕМЫ = {
     "Тёмная": {
-        "background": "#111827", "surface": "#1C2636", "text": "#EDF2FA",
+        "field": "#151E2D", "background": "#111827", "surface": "#1C2636", "text": "#EDF2FA",
         "muted": "#AAB8CD", "border": "#39475D", "hover": "#2B3950",
         "disabled": "#8391A7", "selection": "#35465F",
     },
     "Графитовая": {
-        "background": "#18181B", "surface": "#242428", "text": "#F4F4F5",
+        "field": "#1C1C20", "background": "#18181B", "surface": "#242428", "text": "#F4F4F5",
         "muted": "#B4B4BF", "border": "#45454F", "hover": "#36363F",
         "disabled": "#92929E", "selection": "#454552",
     },
     "Светлая": {
-        "background": "#F1F4F8", "surface": "#FFFFFF", "text": "#18263C",
+        "field": "#E9EEF5", "background": "#F1F4F8", "surface": "#FFFFFF", "text": "#18263C",
         "muted": "#526179", "border": "#CBD5E1", "hover": "#E7EDF5",
         "disabled": "#6B778A", "selection": "#DBE5F3",
     },
