@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable, Sequence
 import difflib
 import os
 from pathlib import Path
@@ -14,7 +15,6 @@ import certifi
 # актуальный bundle сертификатов, сохраняя настройку пользователя, если она есть.
 os.environ.setdefault("SSL_CERT_FILE", certifi.where())
 
-import easyocr
 import numpy as np
 from PIL import Image, ImageOps
 from pillow_heif import register_heif_opener
@@ -43,6 +43,13 @@ import pymupdf
     "ОТЛИЧИЕМ",
 )
 НАПРАВЛЕНИЯ_ПО_КОДУ = {"09.03.04": "Программная инженерия"}
+
+
+def создать_распознаватель(языки: Sequence[str] = ("ru",)):
+    """Загружает OCR-модель; один экземпляр можно использовать для многих файлов."""
+    import easyocr
+
+    return easyocr.Reader(list(языки), gpu=False, verbose=False)
 
 
 def исправить_термины_диплома(текст: str) -> tuple[str, bool]:
@@ -92,7 +99,7 @@ def исправить_направление_по_коду(текст: str) -> 
     )
     if not совпадение:
         return текст, False
-    код, название = совпадение.groups()
+    код = совпадение.group(1)
     эталон = НАПРАВЛЕНИЯ_ПО_КОДУ.get(код)
     if эталон is None:
         return текст, False
@@ -345,7 +352,7 @@ def показать_оба_варианта(исходный: str, исправ
 def собрать_строки(результаты) -> list[str]:
     """Группирует найденные фрагменты текста по строкам страницы."""
     фрагменты = []
-    for рамка, текст, уверенность in результаты:
+    for рамка, текст, _ in результаты:
         if not текст.strip():
             continue
         координаты = np.asarray(рамка, dtype=float)
@@ -360,7 +367,6 @@ def собрать_строки(результаты) -> list[str]:
                 "bottom": низ,
                 "left": лево,
                 "height": высота,
-                "confidence": float(уверенность),
             }
         )
 
@@ -547,13 +553,18 @@ def распознать(
     корректор: РусскийКорректор | None = None,
     словарная_проверка_диплома: bool = False,
     только_исправленный: bool = False,
+    распознаватель=None,
+    прогресс: Callable[[int, int], None] | None = None,
 ) -> str:
-    """Распознаёт изображение или каждую страницу PDF-файла."""
+    """Распознаёт фото/PDF, сообщая номер страницы перед её обработкой.
+
+    Переданный распознаватель переиспользуется без повторной загрузки модели.
+    Если он не указан, создаётся русскоязычная OCR-модель, как при запуске CLI.
+    """
     register_heif_opener()
 
-    # EasyOCR умеет распознавать русский текст и самостоятельно загружает
-    # предварительно обученные веса при первом запуске.
-    распознаватель = easyocr.Reader(["ru"], gpu=False, verbose=False)
+    if распознаватель is None:
+        распознаватель = создать_распознаватель()
 
     def обработать(изображение: Image.Image) -> list[tuple[str | None, str]]:
         if шаблон_диплома:
@@ -603,6 +614,8 @@ def распознать(
             if документ.page_count == 0:
                 raise ValueError("В PDF нет страниц.")
             for номер, страница in enumerate(документ, start=1):
+                if прогресс is not None:
+                    прогресс(номер, документ.page_count)
                 пиксели = страница.get_pixmap(
                     matrix=pymupdf.Matrix(1, 1),
                     colorspace=pymupdf.csRGB,
@@ -630,6 +643,8 @@ def распознать(
         return "\n\n".join(размеченные_страницы)
 
     with Image.open(путь) as исходное_изображение:
+        if прогресс is not None:
+            прогресс(1, 1)
         исходное_изображение = ImageOps.exif_transpose(исходное_изображение).convert("RGB")
         return "\n".join(текст for _, текст in обработать(исходное_изображение))
 
