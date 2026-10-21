@@ -7,7 +7,9 @@ import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, font as tkfont, messagebox, ttk
-from tkinter.scrolledtext import ScrolledText
+from appearance import (
+    АКЦЕНТЫ, РАЗМЕРЫ, ТЕМЫ, Оформление, загрузить_оформление, сохранить_оформление,
+)
 
 from document_batch import (
     ДОПУСТИМЫЕ_РАСШИРЕНИЯ,
@@ -27,12 +29,11 @@ from document_batch import (
     )),
     ("Все файлы", "*"),
 )
-ФОН = "#F3F6FA"
-БЕЛЫЙ = "#FFFFFF"
-ТЕКСТ = "#18263C"
-ВТОРИЧНЫЙ = "#66768C"
-АКЦЕНТ = "#2563EB"
-ГРАНИЦА = "#DEE5EF"
+# Семантические роли: цвета меняются без пересоздания виджетов.
+ФОН = "background"
+ПОВЕРХНОСТЬ = "surface"
+ТЕКСТ = "text"
+ВТОРИЧНЫЙ = "muted"
 
 
 def число_файлов(число: int) -> str:
@@ -51,7 +52,9 @@ class ПриложениеOCR:
         окно.title("Распознавание печатного текста")
         окно.geometry("1240x860")
         окно.minsize(1000, 740)
-        окно.configure(background=ФОН)
+        self.оформление = загрузить_оформление()
+        self._надписи = []
+        self._окно_оформления = None
         self.шрифт = tkfont.nametofont("TkDefaultFont").actual("family")
         self.типы = {тип.код: тип for тип in ТИПЫ_ДОКУМЕНТОВ}
         self.файлы: dict[str, list[Path]] = {код: [] for код in self.типы}
@@ -73,48 +76,145 @@ class ПриложениеOCR:
             окно.bind(сочетание, lambda событие: self._добавить_файлы())
 
     def _стили(self) -> None:
+        п = self.оформление.палитра
+        р = self.оформление.шрифт
         стиль = ttk.Style(self.окно)
-        стиль.theme_use("clam")
-        стиль.configure("TFrame", background=ФОН)
-        стиль.configure("Card.TFrame", background=БЕЛЫЙ)
-        стиль.configure("TLabel", background=ФОН, foreground=ТЕКСТ,
-                         font=(self.шрифт, 12))
-        стиль.configure("TButton", background=БЕЛЫЙ, foreground=ТЕКСТ,
-                         bordercolor=ГРАНИЦА, lightcolor=БЕЛЫЙ, darkcolor=ГРАНИЦА,
-                         padding=(12, 8), font=(self.шрифт, 11), relief="flat")
-        стиль.map("TButton", background=[("active", "#EDF2FA")],
-                    foreground=[("disabled", "#9AA6B6")])
-        стиль.configure("Accent.TButton", background=АКЦЕНТ, foreground=БЕЛЫЙ,
-                         borderwidth=0, padding=(18, 11),
-                         font=(self.шрифт, 12, "bold"))
-        стиль.map("Accent.TButton", background=[("disabled", "#DFE7F3"),
-                                                  ("active", "#1D4ED8")],
-                    foreground=[("disabled", "#7B8CA6")])
-        стиль.configure("Nav.TButton", background=ФОН, borderwidth=0,
-                         padding=(14, 13), anchor="w", font=(self.шрифт, 12))
-        стиль.configure("Selected.Nav.TButton", background="#E3EDFF",
-                         foreground="#1D4ED8", font=(self.шрифт, 12, "bold"))
-        стиль.map("Selected.Nav.TButton", background=[("active", "#D7E5FF")])
-        стиль.configure("TCheckbutton", background=ФОН, foreground=ТЕКСТ,
-                         font=(self.шрифт, 11), padding=(0, 3))
-        стиль.map("TCheckbutton", background=[("active", ФОН)])
-        стиль.configure("Treeview", background=БЕЛЫЙ, fieldbackground=БЕЛЫЙ,
-                         foreground=ТЕКСТ, rowheight=31, borderwidth=0,
-                         font=(self.шрифт, 11))
-        стиль.configure("Treeview.Heading", background="#F5F8FC",
-                         foreground=ВТОРИЧНЫЙ, relief="flat", padding=(8, 7),
-                         font=(self.шрифт, 10, "bold"))
-        стиль.map("Treeview", background=[("selected", "#DFEAFF")],
-                    foreground=[("selected", "#173F8B")])
-        стиль.configure("Horizontal.TProgressbar", troughcolor="#E4EAF3",
-                         background=АКЦЕНТ, borderwidth=0, thickness=5)
-        стиль.configure("TPanedwindow", background=ФОН)
+        if стиль.theme_use() != "clam":
+            стиль.theme_use("clam")
+        self.окно.configure(background=п[ФОН])
+        стиль.configure(".", background=п[ФОН], foreground=п[ТЕКСТ],
+                         font=(self.шрифт, р(11)), bordercolor=п["border"],
+                         focuscolor=п["accent"], troughcolor=п[ФОН])
+        стиль.configure("TFrame", background=п[ФОН])
+        стиль.configure("Card.TFrame", background=п[ПОВЕРХНОСТЬ])
+        стиль.configure("TLabel", background=п[ФОН], foreground=п[ТЕКСТ],
+                         font=(self.шрифт, р(12)))
+        стиль.configure("Muted.TLabel", foreground=п[ВТОРИЧНЫЙ], font=(self.шрифт, р(10)))
+        стиль.configure("TButton", background=п[ПОВЕРХНОСТЬ], foreground=п[ТЕКСТ],
+                         bordercolor=п["border"], lightcolor=п[ПОВЕРХНОСТЬ],
+                         darkcolor=п["border"], padding=(12, 8),
+                         font=(self.шрифт, р(11)), relief="flat")
+        стиль.map("TButton", background=[("disabled", п[ПОВЕРХНОСТЬ]),
+                                           ("active", п["hover"])],
+                    foreground=[("disabled", п["disabled"])])
+        стиль.configure("Accent.TButton", background=п["accent"], foreground="#FFFFFF",
+                         borderwidth=0, padding=(18, 11), font=(self.шрифт, р(12), "bold"))
+        стиль.map("Accent.TButton", background=[("disabled", п["border"]),
+                                                  ("active", п["accent_hover"])],
+                    foreground=[("disabled", п["disabled"]), ("!disabled", "#FFFFFF")])
+        стиль.configure("Nav.TButton", background=п[ФОН], borderwidth=0,
+                         padding=(14, 13), anchor="w", font=(self.шрифт, р(12)))
+        стиль.configure("Selected.Nav.TButton", background=п["selection"],
+                         foreground=п[ТЕКСТ], font=(self.шрифт, р(12), "bold"))
+        стиль.map("Selected.Nav.TButton", background=[("active", п["hover"]),
+                                                        ("!active", п["selection"])])
+        стиль.configure("TCheckbutton", background=п[ФОН], foreground=п[ТЕКСТ],
+                         font=(self.шрифт, р(11)), padding=(0, 3),
+                         indicatorbackground=п[ПОВЕРХНОСТЬ], indicatorforeground="#FFFFFF")
+        стиль.map("TCheckbutton", background=[("active", п[ФОН])],
+                    foreground=[("disabled", п["disabled"])],
+                    indicatorbackground=[("selected", п["accent"])])
+        стиль.configure("Treeview", background=п[ПОВЕРХНОСТЬ], fieldbackground=п[ПОВЕРХНОСТЬ],
+                         foreground=п[ТЕКСТ], rowheight=31 + 2 * (р(11) - 11),
+                         borderwidth=0, font=(self.шрифт, р(11)))
+        стиль.configure("Treeview.Heading", background=п[ФОН], foreground=п[ВТОРИЧНЫЙ],
+                         relief="flat", padding=(8, 7), font=(self.шрифт, р(10), "bold"))
+        стиль.map("Treeview.Heading", background=[("active", п["hover"])])
+        стиль.map("Treeview", background=[("selected", п["selection"])],
+                    foreground=[("selected", п[ТЕКСТ])])
+        стиль.configure("Horizontal.TProgressbar", troughcolor=п["border"],
+                         background=п["accent"], borderwidth=0, thickness=5)
+        стиль.configure("TPanedwindow", background=п[ФОН])
+        стиль.configure("TScrollbar", background=п["border"], troughcolor=п[ПОВЕРХНОСТЬ],
+                         arrowcolor=п[ВТОРИЧНЫЙ], borderwidth=0)
+        стиль.map("TScrollbar", background=[("active", п["hover"]),
+                                              ("pressed", п["selection"])])
+        стиль.configure("TCombobox", fieldbackground=п[ПОВЕРХНОСТЬ], background=п[ПОВЕРХНОСТЬ],
+                         foreground=п[ТЕКСТ], arrowcolor=п[ТЕКСТ], padding=7)
+        стиль.map("TCombobox", fieldbackground=[("readonly", п[ПОВЕРХНОСТЬ])],
+                    foreground=[("readonly", п[ТЕКСТ])],
+                    selectbackground=[("readonly", п[ПОВЕРХНОСТЬ])],
+                    selectforeground=[("readonly", п[ТЕКСТ])])
+        for опция, значение in {"background": п[ПОВЕРХНОСТЬ], "foreground": п[ТЕКСТ],
+                                 "selectBackground": п["selection"],
+                                 "selectForeground": п[ТЕКСТ],
+                                 "font": (self.шрифт, р(11))}.items():
+            self.окно.option_add(f"*TCombobox*Listbox.{опция}", значение)
+        for виджет, размер, жирный, цвет, фон in self._надписи:
+            виджет.configure(background=п[фон], foreground=п[цвет],
+                              font=(self.шрифт, р(размер), "bold" if жирный else "normal"))
+        if hasattr(self, "результат"):
+            self.результат.configure(background=п[ПОВЕРХНОСТЬ], foreground=п[ТЕКСТ],
+                                     insertbackground=п[ТЕКСТ], selectbackground=п["selection"],
+                                     selectforeground=п[ТЕКСТ], font=(self.шрифт, р(12)))
+            self.боковая.configure(width=238 + (р(12) - 12) * 16)
 
     def _надпись(self, родитель, текст="", *, размер=12, жирный=False,
-                 цвет=ТЕКСТ, фон=БЕЛЫЙ, **параметры) -> tk.Label:
-        return tk.Label(родитель, text=текст, background=фон, foreground=цвет,
-                        font=(self.шрифт, размер, "bold" if жирный else "normal"),
-                        anchor="w", justify="left", **параметры)
+                 цвет=ТЕКСТ, фон=ПОВЕРХНОСТЬ, **параметры) -> tk.Label:
+        п = self.оформление.палитра
+        виджет = tk.Label(родитель, text=текст, background=п[фон], foreground=п[цвет],
+                          font=(self.шрифт, self.оформление.шрифт(размер),
+                                "bold" if жирный else "normal"),
+                          anchor="w", justify="left", **параметры)
+        self._надписи.append((виджет, размер, жирный, цвет, фон))
+        return виджет
+
+    def _настроить_оформление(self) -> None:
+        if self._окно_оформления is not None:
+            self._окно_оформления.lift()
+            return
+        диалог = tk.Toplevel(self.окно)
+        self._окно_оформления = диалог
+        диалог.title("Оформление")
+        диалог.transient(self.окно)
+        диалог.resizable(False, False)
+        диалог.configure(background=self.оформление.палитра[ФОН])
+        панель = ttk.Frame(диалог, padding=24)
+        панель.pack(fill="both", expand=True)
+        панель.columnconfigure(1, weight=1)
+        значения = {}
+        for строка, (ключ, подпись, варианты) in enumerate((
+            ("тема", "Тема", ТЕМЫ), ("акцент", "Акцентный цвет", АКЦЕНТЫ),
+            ("размер", "Размер текста", РАЗМЕРЫ),
+        )):
+            ttk.Label(панель, text=подпись).grid(row=строка, column=0, sticky="w", padx=(0, 18), pady=8)
+            переменная = tk.StringVar(master=диалог, value=getattr(self.оформление, ключ))
+            значения[ключ] = переменная
+            ttk.Combobox(панель, textvariable=переменная, values=tuple(варианты),
+                         state="readonly", width=20, font=(self.шрифт, self.оформление.шрифт(11))).grid(
+                row=строка, column=1, sticky="ew", pady=8)
+        ttk.Label(панель, text="Выбор сохранится для следующих запусков.",
+                  style="Muted.TLabel").grid(row=3, column=0, columnspan=2, sticky="w", pady=(12, 18))
+        кнопки = ttk.Frame(панель)
+        кнопки.grid(row=4, column=0, columnspan=2, sticky="ew")
+
+        def закрыть():
+            self._окно_оформления = None
+            диалог.destroy()
+
+        def сбросить():
+            исходные = Оформление()
+            for ключ, переменная in значения.items():
+                переменная.set(getattr(исходные, ключ))
+
+        def применить():
+            настройки = Оформление(**{ключ: переменная.get() for ключ, переменная in значения.items()})
+            try:
+                сохранить_оформление(настройки)
+            except OSError as ошибка:
+                messagebox.showerror("Не удалось сохранить оформление", str(ошибка), parent=диалог)
+                return
+            self.оформление = настройки
+            self._стили()
+            закрыть()
+
+        ttk.Button(кнопки, text="Сбросить", command=сбросить).pack(side="left")
+        ttk.Button(кнопки, text="Сохранить", style="Accent.TButton", command=применить).pack(side="right")
+        ttk.Button(кнопки, text="Отмена", command=закрыть).pack(side="right", padx=8)
+        диалог.protocol("WM_DELETE_WINDOW", закрыть)
+        диалог.bind("<Escape>", lambda событие: закрыть())
+        диалог.grab_set()
+        диалог.focus_set()
 
     def _создать_интерфейс(self) -> None:
         основной = ttk.Frame(self.окно, padding=22)
@@ -129,12 +229,14 @@ class ПриложениеOCR:
         self._надпись(шапка, "Соберите комплект и получите текст по разделам",
                       цвет=ВТОРИЧНЫЙ, фон=ФОН).grid(row=1, column=0, sticky="w", pady=(4, 0))
         self.кнопка_стоп = ttk.Button(шапка, text="Остановить", command=self._остановить)
-        self.кнопка_стоп.grid(row=0, column=1, rowspan=2, padx=(8, 10))
+        self.кнопка_стоп.grid(row=0, column=2, rowspan=2, padx=(8, 10))
         self.кнопка_стоп.grid_remove()
         self.кнопка_распознать = ttk.Button(
             шапка, text="Распознать комплект", style="Accent.TButton",
             command=self._начать_распознавание, state="disabled")
-        self.кнопка_распознать.grid(row=0, column=2, rowspan=2)
+        self.кнопка_распознать.grid(row=0, column=3, rowspan=2)
+        ttk.Button(шапка, text="Оформление…", command=self._настроить_оформление).grid(
+            row=0, column=1, rowspan=2, padx=(12, 10))
 
         параметры = ttk.Frame(основной)
         параметры.grid(row=1, column=0, sticky="ew", pady=(0, 16))
@@ -153,7 +255,7 @@ class ПриложениеOCR:
         содержимое.grid(row=2, column=0, sticky="nsew")
         содержимое.columnconfigure(1, weight=1)
         содержимое.rowconfigure(0, weight=1)
-        боковая = ttk.Frame(содержимое, width=238)
+        self.боковая = боковая = ttk.Frame(содержимое, width=238 + (self.оформление.шрифт(12) - 12) * 16)
         боковая.grid(row=0, column=0, sticky="nsw", padx=(0, 20))
         боковая.grid_propagate(False)
         боковая.columnconfigure(0, weight=1)
@@ -165,11 +267,12 @@ class ПриложениеOCR:
                                 command=lambda код=тип.код: self._выбрать_раздел(код))
             кнопка.grid(row=номер, column=0, sticky="ew", pady=(0, 5))
             self.кнопки_разделов[тип.код] = кнопка
-        боковая.rowconfigure(6, weight=1)
+        низ = len(ТИПЫ_ДОКУМЕНТОВ) + 1
+        боковая.rowconfigure(низ, weight=1)
         self.итог_файлов = self._надпись(боковая, размер=11, жирный=True, фон=ФОН)
-        self.итог_файлов.grid(row=7, column=0, sticky="w", pady=(20, 5))
+        self.итог_файлов.grid(row=низ + 1, column=0, sticky="w", pady=(20, 5))
         self._надпись(боковая, "JPG, JPEG, PNG, HEIC, PDF\nВсе страницы PDF распознаются\nавтоматически.",
-                      размер=10, цвет=ВТОРИЧНЫЙ, фон=ФОН).grid(row=8, column=0, sticky="w")
+                      размер=10, цвет=ВТОРИЧНЫЙ, фон=ФОН).grid(row=низ + 2, column=0, sticky="w")
 
         рабочая = ttk.Panedwindow(содержимое, orient="vertical")
         рабочая.grid(row=0, column=1, sticky="nsew")
@@ -252,12 +355,16 @@ class ПриложениеOCR:
         поле.grid(row=1, column=0, sticky="nsew")
         поле.columnconfigure(0, weight=1)
         поле.rowconfigure(0, weight=1)
-        self.результат = ScrolledText(поле, wrap="word", font=(self.шрифт, 12),
-                                    background=БЕЛЫЙ, foreground=ТЕКСТ, insertbackground=АКЦЕНТ,
-                                    selectbackground="#DFEAFF", selectforeground=ТЕКСТ,
-                                    borderwidth=0, highlightthickness=0, padx=3, pady=6,
-                                    spacing1=2, spacing3=3, height=10, undo=True)
+        п = self.оформление.палитра
+        self.результат = tk.Text(поле, wrap="word", font=(self.шрифт, self.оформление.шрифт(12)),
+                                background=п[ПОВЕРХНОСТЬ], foreground=п[ТЕКСТ], insertbackground=п[ТЕКСТ],
+                                selectbackground=п["selection"], selectforeground=п[ТЕКСТ],
+                                borderwidth=0, highlightthickness=0, padx=3, pady=6,
+                                spacing1=2, spacing3=3, height=10, undo=True)
         self.результат.grid(row=0, column=0, sticky="nsew")
+        полоса = ttk.Scrollbar(поле, orient="vertical", command=self.результат.yview)
+        полоса.grid(row=0, column=1, sticky="ns")
+        self.результат.configure(yscrollcommand=полоса.set)
         self.результат.bind("<<Modified>>", self._текст_изменён)
         self.пустой_результат = self._надпись(
             поле, "Здесь появится текст документов\nПосле распознавания его можно отредактировать и сохранить.",
